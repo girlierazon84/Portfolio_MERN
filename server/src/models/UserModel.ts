@@ -1,7 +1,6 @@
 import { Schema, model } from 'mongoose'
 import { CreateNewUser } from '../utils/interfaces/Users'
 
-const dbCollection = process.env.MONGODB_COLLECTION_USER ?? 'users';
 
 const newUserSchema = new Schema<CreateNewUser>({
     firstname: { type: String, required: true },
@@ -12,6 +11,9 @@ const newUserSchema = new Schema<CreateNewUser>({
 },
     {timestamps: true}
 )
+
+// Define the collection name for the users
+const dbCollection = 'users';
 
 const UserModel = model<CreateNewUser>(dbCollection, newUserSchema);
 
