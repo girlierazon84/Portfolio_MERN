@@ -1,5 +1,6 @@
-export interface CreateNewMessage {
-    author: string
-    title: string
-    content: string
+export interface ContactMessage {
+  name: string
+  email: string
+  subject: string
+  message: string
 }
