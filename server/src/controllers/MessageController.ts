@@ -76,6 +76,39 @@ const getMessageById = async (req: Request, res: Response) => {
 }
 
 /**
+ * Update message status (e.g. mark as read/responded)
+ */
+const updateMessageStatus = async (req: Request, res: Response) => {
+  try {
+    const { messageId } = req.params
+    const { status } = req.body
+
+    if (!status || !['pending', 'read', 'responded'].includes(status)) {
+      return res.status(StatusCode.BAD_REQUEST).send({
+        message: 'Invalid status. Allowed values: pending, read, responded'
+      })
+    }
+
+    const response = await MessageModel.findByIdAndUpdate(
+      messageId,
+      { status },
+      { new: true }
+    )
+
+    if (!response) {
+      return res.status(StatusCode.NOT_FOUND).send({ message: `Message with ID ${messageId} not found` })
+    }
+
+    res.status(StatusCode.OK).send(response)
+  } catch (error) {
+    res.status(StatusCode.INTERNAL_SERVER_ERROR).send({
+      message: `Error occurred while trying to update message with ID: ${req.params.messageId}`,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
  * Delete a message
  */
 const deleteMessage = async (req: Request, res: Response) => {
@@ -103,5 +136,6 @@ export default {
   createMessage,
   getAllMessages,
   getMessageById,
+  updateMessageStatus,
   deleteMessage,
 }
