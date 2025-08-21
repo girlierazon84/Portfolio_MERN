@@ -4,4 +4,5 @@ export interface CreateNewUser {
     email: string
     username: string
     password: string
+    role?: 'user' | 'admin'
 }
