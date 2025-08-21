@@ -1,11 +1,14 @@
 import bcrypt from 'bcrypt'
+import jwt from 'jsonwebtoken'
+import { Request, Response } from 'express'
+
 import StatusCode from '../config/StatusCode'
 import UserModel from '../models/UserModel'
 import { CreateNewUser } from '../utils/interfaces/Users'
 import Logger from '../utils/Logger'
-import { Request, Response } from 'express'
 
 const saltRounds = 10
+const JWT_SECRET = process.env.JWT_SECRET || 'default_secret' // Use .env in production
 
 /**
  * Encrypt a password using bcrypt
@@ -30,11 +33,9 @@ const createUser = async (req: Request, res: Response) => {
     password = await encryptPassword(password)
 
     const user = new UserModel({ firstname, lastname, email, username, password })
-    Logger.debug(user)
-
     const response = await user.save()
-    Logger.debug(response)
 
+    Logger.debug(response)
     res.status(StatusCode.CREATED).send(response)
   } catch (error) {
     Logger.error(error)
@@ -45,33 +46,28 @@ const createUser = async (req: Request, res: Response) => {
   }
 }
 
-interface VerifyUser {
-  message: boolean
-}
-
-interface SearchForUser {
-  username: string
-}
-
 /**
- * Verify user credentials
+ * Verify user credentials and issue JWT
  */
 const verifyUser = async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body
     Logger.http(req.body)
 
-    const query: SearchForUser = { username: String(username) }
-    const dbQuery = await UserModel.find(query)
-
-    if (dbQuery.length === 0) {
+    const user = await UserModel.findOne({ username })
+    if (!user) {
       return res.status(StatusCode.NOT_FOUND).send({ message: 'User not found' })
     }
 
-    const isMatch = await bcrypt.compare(String(password), dbQuery[0].password)
+    const isMatch = await bcrypt.compare(password, user.password)
+    if (!isMatch) {
+      return res.status(StatusCode.UNAUTHORIZED).send({ message: 'Invalid credentials' })
+    }
 
-    const response: VerifyUser = { message: isMatch }
-    res.status(StatusCode.OK).send(response)
+    // Generate JWT (expires in 1h)
+    const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, { expiresIn: '1h' })
+
+    res.status(StatusCode.OK).send({ message: true, token })
   } catch (error) {
     Logger.error(error)
     res.status(StatusCode.INTERNAL_SERVER_ERROR).send({
@@ -107,12 +103,11 @@ const getUserWithId = async (req: Request, res: Response) => {
     Logger.http(`userId: ${userId}`)
 
     const response = await UserModel.findById(userId)
-    Logger.debug(response)
-
     if (!response) {
       return res.status(StatusCode.NOT_FOUND).send({ message: `User with ID ${userId} not found` })
     }
 
+    Logger.debug(response)
     res.status(StatusCode.OK).send(response)
   } catch (error) {
     Logger.error(error)
@@ -131,10 +126,7 @@ const getUserWithQuery = async (req: Request, res: Response) => {
     const { username } = req.query
     Logger.http(`username: ${username}`)
 
-    const query: SearchForUser = { username: String(username) }
-    const response = await UserModel.find(query)
-    Logger.debug(response)
-
+    const response = await UserModel.find({ username })
     response.length !== 0
       ? res.status(StatusCode.OK).send(response)
       : res.status(StatusCode.NOT_FOUND).send({
@@ -155,10 +147,9 @@ const getUserWithQuery = async (req: Request, res: Response) => {
 const updateUser = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params
-    Logger.http(`userId: ${userId}`)
     let { firstname, lastname, email, username, password } = req.body
 
-    if (!req.body) {
+    if (!req.body || Object.keys(req.body).length === 0) {
       return res.status(StatusCode.BAD_REQUEST).send({ message: `Can't update with empty body` })
     }
 
@@ -176,7 +167,6 @@ const updateUser = async (req: Request, res: Response) => {
       return res.status(StatusCode.NOT_FOUND).send({ message: `User with ID ${userId} not found` })
     }
 
-    Logger.debug(response)
     res.status(StatusCode.OK).send(response)
   } catch (error) {
     Logger.error(error)
